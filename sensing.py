@@ -1,8 +1,16 @@
-"""Merge local raw Open-Meteo JSON files into data/raw/sensed_data.csv.
+"""Step 2 of the pipeline: merge the local raw JSON files into one table.
 
-No API calls are made here - only files in data/raw are read.
-The location is identified from the coordinates inside each JSON
-(nearest known city), so it also works for test files with any file name.
+Input : data/raw/<city>/*.json   (written by data_collection.py)
+Output: data/raw/sensed_data.csv  - one row per (location, date), columns =
+        location, date + every daily variable returned by the API.
+
+- No API calls are made here; only local files are read.
+- The location is taken from the coordinates stored inside each JSON
+  (nearest known city), not from the file name. This way the same code also
+  works on the raw JSON test files of Part B, whatever their names are.
+- Duplicates by (location, date) are removed, e.g. if two files overlap.
+
+Run:  python sensing.py
 """
 
 from __future__ import annotations
@@ -27,17 +35,25 @@ LOCATIONS = {
 
 
 def nearest_location(lat: float, lon: float) -> str:
+    """Return the known city closest to the given coordinates.
+
+    The API returns grid-cell coordinates that differ slightly from the
+    requested ones, so an exact match is not possible.
+    """
     return min(LOCATIONS, key=lambda name: math.dist((lat, lon), LOCATIONS[name]))
 
 
 def json_to_frame(path: Path) -> pd.DataFrame:
+    """Convert one raw JSON file to a table: one row per day."""
     payload = json.loads(path.read_text(encoding="utf-8"))
+    # payload["daily"] is {variable: [value per day]}; "time" holds the dates.
     df = pd.DataFrame(payload["daily"]).rename(columns={"time": "date"})
     df.insert(0, "location", nearest_location(payload["latitude"], payload["longitude"]))
     return df
 
 
 def build_sensed_table(raw_dir: Path = RAW_DIR) -> pd.DataFrame:
+    """Read all JSON files under raw_dir, merge, de-duplicate and sort."""
     files = sorted(raw_dir.rglob("*.json"))  # data/raw/<city>/*.json
     if not files:
         raise FileNotFoundError(f"No JSON files in {raw_dir}. Run data_collection.py first.")
