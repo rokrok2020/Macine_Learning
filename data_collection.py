@@ -28,6 +28,8 @@ REQUEST_TIMEOUT = 60
 # Open-Meteo weights long/multi-variable requests as several calls,
 # so a short pause avoids hitting the per-minute limit (HTTP 429).
 PAUSE_BETWEEN_REQUESTS = 5
+# A Retry-After longer than this means the daily quota is used up.
+MAX_WAIT_SECONDS = 15 * 60
 
 START_DATE = date(2010, 1, 1)
 # The archive is published with a delay of a few days.
@@ -69,6 +71,12 @@ EXTRA_VARIABLES = [
 ]
 
 DAILY_VARIABLES = REQUIRED_VARIABLES + EXTRA_VARIABLES
+
+
+class QuotaExhausted(Exception):
+    def __init__(self, wait_seconds: int) -> None:
+        super().__init__(f"Quota exhausted, Retry-After={wait_seconds}s")
+        self.wait_seconds = wait_seconds
 
 
 class RateLimiter:
@@ -135,6 +143,9 @@ def fetch(session: requests.Session, limiter: RateLimiter, params: dict) -> byte
 
         if response.status_code == 429 or response.status_code >= 500:
             wait_s = int(response.headers.get("Retry-After", min(2 ** attempt * 15, 900)))
+            if wait_s > MAX_WAIT_SECONDS:
+                # Daily quota exhausted: stop instead of blocking for hours.
+                raise QuotaExhausted(wait_s)
             print(f"  HTTP {response.status_code}, waiting {wait_s}s ({attempt}/{MAX_RETRIES})")
             time.sleep(wait_s)
             continue
@@ -145,14 +156,15 @@ def fetch(session: requests.Session, limiter: RateLimiter, params: dict) -> byte
 
 
 def collect() -> None:
-    RAW_DIR.mkdir(parents=True, exist_ok=True)
     limiter = RateLimiter()
     downloaded = skipped = 0
 
     with requests.Session() as session:
         for location, (lat, lon) in LOCATIONS.items():
+            city_dir = RAW_DIR / location
+            city_dir.mkdir(parents=True, exist_ok=True)
             for chunk_start, chunk_end in year_chunks(START_DATE, END_DATE):
-                out = RAW_DIR / f"{location}_{chunk_start}_{chunk_end}.json"
+                out = city_dir / f"{location}_{chunk_start}_{chunk_end}.json"
                 if out.exists():
                     skipped += 1
                     continue
@@ -165,7 +177,18 @@ def collect() -> None:
                     "daily": ",".join(DAILY_VARIABLES),
                     "timezone": "auto",
                 }
-                out.write_bytes(fetch(session, limiter, params))
+                try:
+                    content = fetch(session, limiter, params)
+                except QuotaExhausted as exc:
+                    hours = exc.wait_seconds / 3600
+                    print(f"API quota exhausted (retry in ~{hours:.1f}h). "
+                          f"downloaded={downloaded}, skipped={skipped}. "
+                          "Run again later - existing files are kept.")
+                    return
+                # Write to a temp file and rename, so a crash never leaves a broken JSON.
+                tmp = out.with_suffix(".json.part")
+                tmp.write_bytes(content)
+                tmp.replace(out)
                 downloaded += 1
                 print(f"Saved {out}")
                 time.sleep(PAUSE_BETWEEN_REQUESTS)

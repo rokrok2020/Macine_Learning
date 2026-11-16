@@ -13,8 +13,8 @@ Open-Meteo Historical Weather API.
 ├── dataset_creation.ipynb    # Step 3: analysis, data quality, preparation, RainTomorrow
 ├── data/
 │   ├── raw/
-│   │   ├── <location>_<start>_<end>.json   # raw API responses, unmodified
-│   │   └── sensed_data.csv                 # one row per (location, date)
+│   │   ├── <city>/<city>_<start>_<end>.json  # raw API responses, one folder per city
+│   │   └── sensed_data.csv                    # one row per (location, date)
 │   └── processed/
 │       └── final_dataset.csv               # prepared data + RainTomorrow
 ├── requirements.txt
@@ -23,7 +23,7 @@ Open-Meteo Historical Weather API.
 
 ## Pipeline
 ```
-Open-Meteo API -> data_collection.py -> data/raw/*.json
+Open-Meteo API -> data_collection.py -> data/raw/<city>/*.json
                -> sensing.py         -> data/raw/sensed_data.csv
                -> dataset_creation.ipynb -> data/processed/final_dataset.csv
 ```
@@ -31,8 +31,8 @@ Open-Meteo API -> data_collection.py -> data/raw/*.json
 ## Files
 | File | Role |
 |---|---|
-| `data_collection.py` | One GET per (location, calendar year) from 2010-01-01 until 7 days before the run date. Saves each response byte-for-byte. Skips files that already exist, so nothing is downloaded twice. Counts requests and waits before 5,000/hour or 10,000/24h. Retries on HTTP 429, 5xx and network errors; stops on HTTP 400 (the request must be fixed). |
-| `sensing.py` | Reads all `data/raw/*.json`, identifies the location from the coordinates inside the JSON (nearest city), adds `location` and `date`, removes duplicates by `location + date`, saves `data/raw/sensed_data.csv`. Makes no API calls. |
+| `data_collection.py` | One GET per (location, calendar year) from 2010-01-01 until 7 days before the run date, saved to `data/raw/<city>/`. Saves each response byte-for-byte via a temp file, so an interrupted run never leaves a broken JSON. Skips files that already exist, so nothing is downloaded twice. Counts requests and waits before 5,000/hour or 10,000/24h. Retries on HTTP 429, 5xx and network errors; stops on HTTP 400 (the request must be fixed). If the API asks to wait more than 15 minutes (daily quota used up), it stops and can simply be re-run later. |
+| `sensing.py` | Reads all `data/raw/<city>/*.json`, identifies the location from the coordinates inside the JSON (nearest city), adds `location` and `date`, removes duplicates by `location + date`, saves `data/raw/sensed_data.csv`. Makes no API calls. |
 | `dataset_creation.ipynb` | Data understanding, prior probabilities, feature relationships, data quality checks, data preparation and creation of `RainTomorrow`. Saved with outputs and figures. |
 | `requirements.txt` | Pinned package versions. |
 

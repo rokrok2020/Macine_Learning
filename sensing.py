@@ -38,7 +38,7 @@ def json_to_frame(path: Path) -> pd.DataFrame:
 
 
 def build_sensed_table(raw_dir: Path = RAW_DIR) -> pd.DataFrame:
-    files = sorted(raw_dir.glob("*.json"))
+    files = sorted(raw_dir.rglob("*.json"))  # data/raw/<city>/*.json
     if not files:
         raise FileNotFoundError(f"No JSON files in {raw_dir}. Run data_collection.py first.")
 
