@@ -38,7 +38,7 @@ Open-Meteo API -> data_collection.py -> data/raw/<city>/*.json
 
 ## Data
 - **Locations:** London, New York, Sydney, Berlin, Tokyo, Vancouver.
-- **Period:** 2010-01-01 to 2026-11-09 (fixed, for reproducibility).
+- **Period:** 2010-01-01 to 2026-11-09 (fixed, for reproducibility). All years are kept in `final_dataset.csv`, together with the `date` column. The source model of the data changed in 2017 and in November 2024 (documented in the notebook); the training period will be chosen in Part B by validation on the most recent months.
 - **Required daily variables (10):** `weather_code`, `temperature_2m_max`, `temperature_2m_min`,
   `temperature_2m_mean`, `apparent_temperature_mean`, `precipitation_sum`, `rain_sum`,
   `precipitation_hours`, `wind_speed_10m_max`, `wind_direction_10m_dominant`.
