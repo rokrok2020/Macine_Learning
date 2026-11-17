@@ -1,15 +1,16 @@
 """Step 1 of the pipeline: collect daily weather data from the Open-Meteo
 Historical Weather API and store the raw responses.
 
-<<<<<<< Updated upstream
 Design decisions (each one maps to a requirement of the assignment):
 - Chunking: one GET request per (location, calendar year). 6 cities x 17 years
   (2010-01-01 to 2026-11-09) = 102 requests. Yearly chunks keep each response small and
   let an interrupted run resume from the last missing year.
 - Storage: each response is saved to data/raw/<city>/<city>_<start>_<end>.json
   exactly as received from the server (raw bytes, no parsing / re-writing).
-- Caching: a file that already exists is skipped, so re-running the script
-  never downloads the same data twice.
+- Caching: a file that already exists AND is complete (all variables, equal
+  lengths) is skipped, so re-running never downloads the same data twice and a
+  damaged file is downloaded again. Files are written to a temporary file and
+  renamed only when complete, so a crash never leaves a broken JSON.
 - Rate limiting: every request (including retries) is counted in two sliding
   windows, and the loop sleeps before exceeding 5,000 requests/hour or
   10,000 requests/24h.
@@ -17,19 +18,10 @@ Design decisions (each one maps to a requirement of the assignment):
     HTTP 429 / 5xx / network error -> temporary problem: wait, then retry.
     HTTP 400 -> the request itself is wrong: stop immediately (a retry of the
     same request can never succeed; the request must be fixed first).
+    Retry-After longer than 15 minutes -> daily quota used up: stop; the next
+    run continues from the first missing file.
 
 Run:  python data_collection.py
-=======
-- One request per (location, calendar year); each response is saved to
-  data/raw/<location>_<start>_<end>.json exactly as received (raw bytes).
-- Files that already exist and are complete are skipped, so re-running never
-  downloads twice. Each file is written to a .tmp file first and renamed only
-  when complete, so an interrupted run never leaves a broken file behind.
-- Requests are counted (retries included) and the loop waits before exceeding
-  5,000 requests/hour or 10,000 requests/24h.
-- HTTP 429 and 5xx (and network errors): wait and retry.
-- HTTP 400: the request itself is wrong, so stop and report (no retry).
->>>>>>> Stashed changes
 """
 
 from __future__ import annotations
@@ -52,14 +44,12 @@ HOURLY_LIMIT = 5_000
 DAILY_LIMIT = 10_000
 MAX_RETRIES = 10
 REQUEST_TIMEOUT = 60
-MAX_WAIT_SECONDS = 3600
 # Open-Meteo weights long/multi-variable requests as several calls,
 # so a short pause avoids hitting the per-minute limit (HTTP 429).
 PAUSE_BETWEEN_REQUESTS = 5
 # A Retry-After longer than this means the daily quota is used up.
 MAX_WAIT_SECONDS = 15 * 60
 
-<<<<<<< Updated upstream
 # Long history (~17 years) gives the model many examples of every season in
 # every city. The model will be tested on future dates, so recent years matter.
 START_DATE = date(2010, 1, 1)
@@ -69,14 +59,6 @@ START_DATE = date(2010, 1, 1)
 END_DATE = date(2026, 11, 9)
 
 # City name -> (latitude, longitude). The API snaps these to the nearest grid cell.
-=======
-# Fixed dates, so every run reproduces exactly the same dataset.
-# (The archive is published with a delay of a few days, so the end date
-# was set about a week before the collection date.)
-START_DATE = date(2010, 1, 1)
-END_DATE = date(2026, 11, 9)
->>>>>>> Stashed changes
-
 LOCATIONS = {
     "london": (51.5074, -0.1278),
     "new_york": (40.7128, -74.0060),
@@ -100,18 +82,11 @@ REQUIRED_VARIABLES = [
     "wind_direction_10m_dominant",
 ]
 
-<<<<<<< Updated upstream
-# ASSUMPTION: the raw test files of Part B will contain these extra variables too
-# (question sent to the course staff). If not, only REQUIRED_VARIABLES are used.
 # Optional extra variables (allowed by the assignment). Each one is physically
 # related to rain formation: moisture (humidity, dew point), weather systems
 # (pressure), clouds / sunshine / radiation, wind gusts (storms), evaporation.
-=======
-# Optional extra variables, physically related to rain formation.
-# ASSUMPTION: the raw test JSON files of Part B will include these variables
-# as well. This was sent to the course staff for confirmation; if the answer
-# is no, the models will use only REQUIRED_VARIABLES.
->>>>>>> Stashed changes
+# ASSUMPTION: the raw test files of Part B will contain these variables too
+# (question sent to the course staff). If not, only REQUIRED_VARIABLES are used.
 EXTRA_VARIABLES = [
     "relative_humidity_2m_mean",
     "dew_point_2m_mean",
@@ -199,6 +174,7 @@ def is_complete(payload: dict) -> bool:
 
 
 def already_downloaded(path: Path) -> bool:
+    """True if the file exists and holds a complete response."""
     if not path.exists():
         return False
     try:
@@ -208,10 +184,10 @@ def already_downloaded(path: Path) -> bool:
 
 
 def retry_wait(response: requests.Response, attempt: int) -> int:
-    """Seconds to wait: the server's Retry-After if it is a number, else exponential backoff."""
+    """Seconds to wait: the server's Retry-After if it is a number, else growing backoff."""
     retry_after = response.headers.get("Retry-After", "")
     if retry_after.isdigit():
-        return min(int(retry_after), MAX_WAIT_SECONDS)
+        return int(retry_after)
     return min(2 ** attempt * 15, MAX_WAIT_SECONDS)
 
 
@@ -233,15 +209,9 @@ def fetch(session: requests.Session, limiter: RateLimiter, params: dict) -> byte
             continue
 
         if response.status_code == 200:
-<<<<<<< Updated upstream
             # Validate the content, but return the original bytes unchanged.
-            payload = response.json()
-            if payload.get("error") or "daily" not in payload:
-                raise RuntimeError(f"Invalid payload: {payload}")
-=======
             if not is_complete(response.json()):
                 raise RuntimeError(f"Incomplete payload: {response.text[:300]}")
->>>>>>> Stashed changes
             return response.content
 
         if response.status_code == 400:
@@ -249,15 +219,10 @@ def fetch(session: requests.Session, limiter: RateLimiter, params: dict) -> byte
             raise ValueError(f"HTTP 400 - fix the request: {response.text[:300]}")
 
         if response.status_code == 429 or response.status_code >= 500:
-<<<<<<< Updated upstream
-            retry_after = response.headers.get("Retry-After", "")
-            wait_s = int(retry_after) if retry_after.isdigit() else min(2 ** attempt * 15, 900)
+            wait_s = retry_wait(response, attempt)
             if wait_s > MAX_WAIT_SECONDS:
                 # Daily quota exhausted: stop instead of blocking for hours.
                 raise QuotaExhausted(wait_s)
-=======
-            wait_s = retry_wait(response, attempt)
->>>>>>> Stashed changes
             print(f"  HTTP {response.status_code}, waiting {wait_s}s ({attempt}/{MAX_RETRIES})")
             time.sleep(wait_s)
             continue
@@ -280,13 +245,8 @@ def collect() -> None:
             city_dir = RAW_DIR / location
             city_dir.mkdir(parents=True, exist_ok=True)
             for chunk_start, chunk_end in year_chunks(START_DATE, END_DATE):
-<<<<<<< Updated upstream
                 out = city_dir / f"{location}_{chunk_start}_{chunk_end}.json"
-                if out.exists():  # caching: never download the same file twice
-=======
-                out = RAW_DIR / f"{location}_{chunk_start}_{chunk_end}.json"
-                if already_downloaded(out):
->>>>>>> Stashed changes
+                if already_downloaded(out):  # caching: never download the same file twice
                     skipped += 1
                     continue
 
@@ -298,7 +258,6 @@ def collect() -> None:
                     "daily": ",".join(DAILY_VARIABLES),
                     "timezone": "auto",
                 }
-<<<<<<< Updated upstream
                 try:
                     content = fetch(session, limiter, params)
                 except QuotaExhausted as exc:
@@ -310,13 +269,9 @@ def collect() -> None:
                 # Write to a temp file and rename, so a crash never leaves a broken JSON.
                 tmp = out.with_suffix(".json.part")
                 tmp.write_bytes(content)
-=======
-                tmp = out.with_suffix(".tmp")
-                tmp.write_bytes(fetch(session, limiter, params))
->>>>>>> Stashed changes
                 tmp.replace(out)
                 downloaded += 1
-                print(f"Saved {out.name}")
+                print(f"Saved {out}")
                 time.sleep(PAUSE_BETWEEN_REQUESTS)
 
     print(f"Done. downloaded={downloaded}, skipped (already on disk)={skipped}, "
