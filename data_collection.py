@@ -85,8 +85,8 @@ REQUIRED_VARIABLES = [
 # Optional extra variables (allowed by the assignment). Each one is physically
 # related to rain formation: moisture (humidity, dew point), weather systems
 # (pressure), clouds / sunshine / radiation, wind gusts (storms), evaporation.
-# ASSUMPTION: the raw test files of Part B will contain these variables too
-# (question sent to the course staff). If not, only REQUIRED_VARIABLES are used.
+# ASSUMPTION (not confirmed with the course staff): the raw test files of Part B will contain these variables too.
+# If they do not, only REQUIRED_VARIABLES are used; this needs only a change of the feature list.
 EXTRA_VARIABLES = [
     "relative_humidity_2m_mean",
     "dew_point_2m_mean",

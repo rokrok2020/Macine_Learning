@@ -45,11 +45,16 @@ Open-Meteo API -> data_collection.py -> data/raw/<city>/*.json
 - **Extra daily variables (8):** `relative_humidity_2m_mean`, `dew_point_2m_mean`,
   `pressure_msl_mean`, `cloud_cover_mean`, `wind_gusts_10m_max`, `sunshine_duration`,
   `shortwave_radiation_sum`, `et0_fao_evapotranspiration`.
-  *Assumption:* the raw test files of Part B will contain these variables too
-  (question sent to the course staff). If not, only the 10 required variables will be used.
+  *Assumption (not confirmed with the course staff):* the raw test files of Part B will contain these variables
+  too, and every test sample is one day. If not, only the 10 required variables will be used.
 - **Target:** within each location, sorted by date,
   `RainTomorrow = 1` if the next day's `precipitation_sum >= 1.0` mm, else `0`.
   The last day of each location is removed. No next-day information is used as a feature.
+- **Final dataset** (`data/processed/final_dataset.csv`, 36,936 rows, 22 columns): `location`, `date`,
+  19 features and the target. Prepared by `prepare_features` in the notebook (the same function will be
+  applied to the raw test files in Part B): `weather_code` -> its rank (0-12), `wind_direction_10m_dominant`
+  -> `wind_dir_sin`, `wind_dir_cos`, new `month_sin`, `month_cos`, one impossible mean temperature corrected,
+  and `rain_sum` and `apparent_temperature_mean` removed (near copies of `precipitation_sum` and `temperature_2m_mean`).
 
 ## How to run (Python 3.10-3.13)
 Run all commands from the project folder.
