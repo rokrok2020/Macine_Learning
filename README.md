@@ -31,13 +31,19 @@ Open-Meteo API -> data_collection.py -> data/raw/<city>/*.json
 ## Files
 | File | Role |
 |---|---|
+<<<<<<< Updated upstream
 | `data_collection.py` | One GET per (location, calendar year) for the fixed range 2010-01-01 to 2026-11-09, saved to `data/raw/<city>/`. Saves each response byte-for-byte via a temp file, so an interrupted run never leaves a broken JSON. Skips files that already exist, so nothing is downloaded twice. Counts requests and waits before 5,000/hour or 10,000/24h. Retries on HTTP 429, 5xx and network errors; stops on HTTP 400 (the request must be fixed). If the API asks to wait more than 15 minutes (daily quota used up), it stops and can simply be re-run later. |
 | `sensing.py` | Reads all `data/raw/<city>/*.json`, identifies the location from the coordinates inside the JSON (nearest city), adds `location` and `date`, removes duplicates by `location + date`, saves `data/raw/sensed_data.csv`. Makes no API calls. |
+=======
+| `data_collection.py` | One GET per (location, calendar year) for the fixed range 2010-01-01 to 2026-11-09. Saves each response byte-for-byte. Skips files that already exist and are complete, so nothing is downloaded twice. Counts every request (retries included) and waits before 5,000/hour or 10,000/24h. Retries on HTTP 429, 5xx and network errors; stops on HTTP 400 (the request must be fixed). |
+| `sensing.py` | Reads all `data/raw/*.json`, identifies the location from the coordinates inside the JSON (nearest city), adds `location` and `date`, removes duplicates by `location + date`, saves `data/raw/sensed_data.csv`. Makes no API calls. |
+>>>>>>> Stashed changes
 | `dataset_creation.ipynb` | Data understanding, prior probabilities, feature relationships, data quality checks, data preparation and creation of `RainTomorrow`. Saved with outputs and figures. |
 | `requirements.txt` | Pinned package versions. |
 
 ## Data
 - **Locations:** London, New York, Sydney, Berlin, Tokyo, Vancouver.
+- **Period:** 2010-01-01 to 2026-11-09 (fixed, for reproducibility).
 - **Required daily variables (10):** `weather_code`, `temperature_2m_max`, `temperature_2m_min`,
   `temperature_2m_mean`, `apparent_temperature_mean`, `precipitation_sum`, `rain_sum`,
   `precipitation_hours`, `wind_speed_10m_max`, `wind_direction_10m_dominant`.
@@ -50,13 +56,18 @@ Open-Meteo API -> data_collection.py -> data/raw/<city>/*.json
   `RainTomorrow = 1` if the next day's `precipitation_sum >= 1.0` mm, else `0`.
   The last day of each location is removed. No next-day information is used as a feature.
 
-## How to run (Windows PowerShell, Python 3.11)
+## How to run (Python 3.10-3.13)
+Run all commands from the project folder.
+
+Windows (PowerShell):
 ```powershell
 python -m pip install -r requirements.txt
 python data_collection.py                  # downloads only missing files
 python sensing.py                          # builds data/raw/sensed_data.csv
 jupyter notebook dataset_creation.ipynb    # Kernel -> Restart & Run All, then save
 ```
+macOS / Linux: the same commands with `python3`.
+
 Close Jupyter before `pip install`, otherwise Windows may lock files.
-The first full download is slow: Open-Meteo returns HTTP 429 at its per-minute limit,
+The first full download is slow: Open-Meteo returns HTTP 429 at its rate limit,
 and the script waits and continues automatically.

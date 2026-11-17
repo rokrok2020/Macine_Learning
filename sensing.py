@@ -21,7 +21,8 @@ from pathlib import Path
 
 import pandas as pd
 
-RAW_DIR = Path("data/raw")
+BASE_DIR = Path(__file__).resolve().parent
+RAW_DIR = BASE_DIR / "data" / "raw"
 OUTPUT = RAW_DIR / "sensed_data.csv"
 
 LOCATIONS = {
