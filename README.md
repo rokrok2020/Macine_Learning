@@ -1,4 +1,4 @@
-Group: <number>
+Group: 61
 
 # Machine Learning 364-1-1811 - Project Part A
 Binary classification of **RainTomorrow**: will at least 1.0 mm of precipitation fall
@@ -31,7 +31,7 @@ Open-Meteo API -> data_collection.py -> data/raw/<city>/*.json
 ## Files
 | File | Role |
 |---|---|
-| `data_collection.py` | One GET per (location, calendar year) from 2010-01-01 until 7 days before the run date, saved to `data/raw/<city>/`. Saves each response byte-for-byte via a temp file, so an interrupted run never leaves a broken JSON. Skips files that already exist, so nothing is downloaded twice. Counts requests and waits before 5,000/hour or 10,000/24h. Retries on HTTP 429, 5xx and network errors; stops on HTTP 400 (the request must be fixed). If the API asks to wait more than 15 minutes (daily quota used up), it stops and can simply be re-run later. |
+| `data_collection.py` | One GET per (location, calendar year) for the fixed range 2010-01-01 to 2026-11-09, saved to `data/raw/<city>/`. Saves each response byte-for-byte via a temp file, so an interrupted run never leaves a broken JSON. Skips files that already exist, so nothing is downloaded twice. Counts requests and waits before 5,000/hour or 10,000/24h. Retries on HTTP 429, 5xx and network errors; stops on HTTP 400 (the request must be fixed). If the API asks to wait more than 15 minutes (daily quota used up), it stops and can simply be re-run later. |
 | `sensing.py` | Reads all `data/raw/<city>/*.json`, identifies the location from the coordinates inside the JSON (nearest city), adds `location` and `date`, removes duplicates by `location + date`, saves `data/raw/sensed_data.csv`. Makes no API calls. |
 | `dataset_creation.ipynb` | Data understanding, prior probabilities, feature relationships, data quality checks, data preparation and creation of `RainTomorrow`. Saved with outputs and figures. |
 | `requirements.txt` | Pinned package versions. |
@@ -44,6 +44,8 @@ Open-Meteo API -> data_collection.py -> data/raw/<city>/*.json
 - **Extra daily variables (8):** `relative_humidity_2m_mean`, `dew_point_2m_mean`,
   `pressure_msl_mean`, `cloud_cover_mean`, `wind_gusts_10m_max`, `sunshine_duration`,
   `shortwave_radiation_sum`, `et0_fao_evapotranspiration`.
+  *Assumption:* the raw test files of Part B will contain these variables too
+  (question sent to the course staff). If not, only the 10 required variables will be used.
 - **Target:** within each location, sorted by date,
   `RainTomorrow = 1` if the next day's `precipitation_sum >= 1.0` mm, else `0`.
   The last day of each location is removed. No next-day information is used as a feature.

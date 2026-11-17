@@ -3,7 +3,7 @@ Historical Weather API and store the raw responses.
 
 Design decisions (each one maps to a requirement of the assignment):
 - Chunking: one GET request per (location, calendar year). 6 cities x 17 years
-  (2010 - today) = 102 requests. Yearly chunks keep each response small and
+  (2010-01-01 to 2026-11-09) = 102 requests. Yearly chunks keep each response small and
   let an interrupted run resume from the last missing year.
 - Storage: each response is saved to data/raw/<city>/<city>_<start>_<end>.json
   exactly as received from the server (raw bytes, no parsing / re-writing).
@@ -24,7 +24,7 @@ from __future__ import annotations
 
 import time
 from collections import deque
-from datetime import date, timedelta
+from datetime import date
 from pathlib import Path
 
 import requests
@@ -47,8 +47,10 @@ MAX_WAIT_SECONDS = 15 * 60
 # Long history (~17 years) gives the model many examples of every season in
 # every city. The model will be tested on future dates, so recent years matter.
 START_DATE = date(2010, 1, 1)
-# The archive is published with a delay of a few days.
-END_DATE = date.today() - timedelta(days=7)
+# Fixed end date, so every run reproduces exactly the same dataset.
+# (The archive is published with a delay of a few days, so the end date was
+# set about a week before the collection date, 2026-11-16.)
+END_DATE = date(2026, 11, 9)
 
 # City name -> (latitude, longitude). The API snaps these to the nearest grid cell.
 
@@ -75,6 +77,8 @@ REQUIRED_VARIABLES = [
     "wind_direction_10m_dominant",
 ]
 
+# ASSUMPTION: the raw test files of Part B will contain these extra variables too
+# (question sent to the course staff). If not, only REQUIRED_VARIABLES are used.
 # Optional extra variables (allowed by the assignment). Each one is physically
 # related to rain formation: moisture (humidity, dew point), weather systems
 # (pressure), clouds / sunshine / radiation, wind gusts (storms), evaporation.
@@ -178,7 +182,8 @@ def fetch(session: requests.Session, limiter: RateLimiter, params: dict) -> byte
             raise ValueError(f"HTTP 400 - fix the request: {response.text}")
 
         if response.status_code == 429 or response.status_code >= 500:
-            wait_s = int(response.headers.get("Retry-After", min(2 ** attempt * 15, 900)))
+            retry_after = response.headers.get("Retry-After", "")
+            wait_s = int(retry_after) if retry_after.isdigit() else min(2 ** attempt * 15, 900)
             if wait_s > MAX_WAIT_SECONDS:
                 # Daily quota exhausted: stop instead of blocking for hours.
                 raise QuotaExhausted(wait_s)
