@@ -31,7 +31,7 @@ Open-Meteo API -> data_collection.py -> data/raw/<city>/*.json
 ## Files
 | File | Role |
 |---|---|
-| `data_collection.py` | One GET per (location, calendar year) for the fixed range 2010-01-01 to 2026-11-09, saved to `data/raw/<city>/`. Saves each response byte-for-byte via a temp file, so an interrupted run never leaves a broken JSON. Skips files that already exist and are complete, so nothing is downloaded twice (a damaged file is downloaded again). Counts every request (retries included) and waits before 5,000/hour or 10,000/24h. Retries on HTTP 429, 5xx and network errors; stops on HTTP 400 (the request must be fixed). If the API asks to wait more than 15 minutes (daily quota used up), it stops and can simply be re-run later. |
+| `data_collection.py` | One GET per (location, calendar year) for the fixed range 2010-01-01 to 2026-11-09, saved to `data/raw/<city>/`. Saves each response byte-for-byte via a temp file, so an interrupted run never leaves a broken JSON. Skips files that already exist and are complete, so nothing is downloaded twice (a damaged file is downloaded again). Counts every request (retries included) and waits before 5,000/hour or 10,000/24h. Retries on HTTP 429, 5xx, network errors and broken responses; stops on HTTP 400 (the request must be fixed). If the API asks to wait more than 15 minutes (daily quota used up), it stops and can simply be re-run later. |
 | `sensing.py` | Reads all `data/raw/<city>/*.json`, identifies the location from the coordinates inside the JSON (nearest city), adds `location` and `date`, removes duplicates by `location + date`, saves `data/raw/sensed_data.csv`. Makes no API calls. |
 | `dataset_creation.ipynb` | Data understanding, prior probabilities, feature relationships, data quality checks, data preparation and creation of `RainTomorrow`. Saved with outputs and figures. |
 | `requirements.txt` | Pinned package versions. |
@@ -45,8 +45,9 @@ Open-Meteo API -> data_collection.py -> data/raw/<city>/*.json
 - **Extra daily variables (8):** `relative_humidity_2m_mean`, `dew_point_2m_mean`,
   `pressure_msl_mean`, `cloud_cover_mean`, `wind_gusts_10m_max`, `sunshine_duration`,
   `shortwave_radiation_sum`, `et0_fao_evapotranspiration`.
-  *Assumption (not confirmed with the course staff):* the raw test files of Part B will contain these variables
-  too, and every test sample is one day. If not, only the 10 required variables will be used.
+  *Test files:* the example raw file published with the assignment holds only the 10 required variables
+  (and two consecutive days), so the extra variables may be missing in Part B. They are kept in the dataset;
+  the notebook measures the cost of using only the 10 required variables (about 0.01-0.03 AUC).
 - **Target:** within each location, sorted by date,
   `RainTomorrow = 1` if the next day's `precipitation_sum >= 1.0` mm, else `0`.
   The last day of each location is removed. No next-day information is used as a feature.
@@ -54,6 +55,7 @@ Open-Meteo API -> data_collection.py -> data/raw/<city>/*.json
   19 features and the target. Prepared by `prepare_features` in the notebook (the same function will be
   applied to the raw test files in Part B): `weather_code` -> its rank (0-12), `wind_direction_10m_dominant`
   -> `wind_dir_sin`, `wind_dir_cos`, new `month_sin`, `month_cos`, one impossible mean temperature corrected,
+  missing values filled with the training median of the same city (none in the training data),
   and `rain_sum` and `apparent_temperature_mean` removed (near copies of `precipitation_sum` and `temperature_2m_mean`).
 
 ## How to run (Python 3.10-3.13)

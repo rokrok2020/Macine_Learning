@@ -85,8 +85,8 @@ REQUIRED_VARIABLES = [
 # Optional extra variables (allowed by the assignment). Each one is physically
 # related to rain formation: moisture (humidity, dew point), weather systems
 # (pressure), clouds / sunshine / radiation, wind gusts (storms), evaporation.
-# ASSUMPTION (not confirmed with the course staff): the raw test files of Part B will contain these variables too.
-# If they do not, only REQUIRED_VARIABLES are used; this needs only a change of the feature list.
+# NOTE: the example raw file published with the assignment holds only REQUIRED_VARIABLES, so the test files of
+# Part B may not contain these. They are kept in the dataset; the notebook measures the cost of dropping them.
 EXTRA_VARIABLES = [
     "relative_humidity_2m_mean",
     "dew_point_2m_mean",
@@ -210,7 +210,15 @@ def fetch(session: requests.Session, limiter: RateLimiter, params: dict) -> byte
 
         if response.status_code == 200:
             # Validate the content, but return the original bytes unchanged.
-            if not is_complete(response.json()):
+            try:
+                payload = response.json()
+            except ValueError:
+                # A cut-off or broken body is a temporary problem, like a network error: wait, then retry.
+                wait_s = min(2 ** attempt, 60)
+                print(f"  invalid JSON in the response, retry {attempt}/{MAX_RETRIES} in {wait_s}s")
+                time.sleep(wait_s)
+                continue
+            if not is_complete(payload):
                 raise RuntimeError(f"Incomplete payload: {response.text[:300]}")
             return response.content
 
